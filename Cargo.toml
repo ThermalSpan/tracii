@@ -1,0 +1,11 @@
+[package]
+name = "tracii"
+version = "0.1.0"
+authors = ["Russell Bentley <russell.w.bentley@icloud.com>"]
+
+[dependencies]
+clap = "2.25.0"
+glob = "0.2.11"
+image = "0.14.0"
+rusttype = "0.2.1"
+tempdir = "0.3.5"
