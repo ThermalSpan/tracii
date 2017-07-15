@@ -1,5 +1,3 @@
-#![feature(unboxed_closures)]
-
 [package]
 name = "tracii"
 version = "0.1.0"

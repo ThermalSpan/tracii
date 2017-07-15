@@ -15,10 +15,11 @@ pub struct Args {
     pub cell_ratio: f32,
     pub font_path: PathBuf,
     pub work_dir: PathBuf,
-    pub export_glyph_renders: bool
+    pub export_glyph_renders: bool,
 }
 
-pub fn parse_args() -> Args { let args = App::new(PROGRAM_NAME)
+pub fn parse_args() -> Args {
+    let args = App::new(PROGRAM_NAME)
         .version(VERSION)
         .author("Russell W. Bentley <russell.w.bentley@icloud.com>")
         .about("A tool for generating fancy ASCII art")
@@ -59,20 +60,22 @@ pub fn parse_args() -> Args { let args = App::new(PROGRAM_NAME)
                 Ok(ratio) => ratio,
                 Err(parse_error) => {
                     println!("--cellratio / -r must be parsable as an f32");
-                    println!("Attempting to parse {} gave the following error:\n{}", ratio_str, parse_error);
+                    println!("Attempting to parse {} gave the following error:\n{}",
+                             ratio_str,
+                             parse_error);
                     println!("\n{}", args.usage());
                     exit(1)
                 }
             }
-        },
-        None => 1.9f32
+        }
+        None => 1.9f32,
     };
 
     // We are either passed a name or a file
     let font_path = match (args.value_of("FONT_FILE"), args.value_of("FONT_NAME")) {
         (Some(file_path_str), None) => {
             let path = PathBuf::from(file_path_str);
-            if ! path.exists() {
+            if !path.exists() {
                 println!("{} does not exist", path.to_string_lossy());
                 exit(1);
             }
@@ -89,17 +92,18 @@ pub fn parse_args() -> Args { let args = App::new(PROGRAM_NAME)
     let work_dir = match args.value_of("WORKING_DIRECTORY") {
         Some(work_dir) => {
             let path = PathBuf::from(work_dir);
-            if ! path.exists() {
+            if !path.exists() {
                 println!("{} does not exist", path.to_string_lossy());
                 exit(1);
             }
             path
-        },
+        }
         None => {
             let tempdir = match TempDir::new("tracii") {
                 Ok(dir) => dir,
                 Err(error) => {
-                    println!("There was an error making a temporary directory:\n{}", error);
+                    println!("There was an error making a temporary directory:\n{}",
+                             error);
                     exit(1);
                 }
             };
@@ -113,19 +117,17 @@ pub fn parse_args() -> Args { let args = App::new(PROGRAM_NAME)
         cell_ratio: cell_ratio,
         font_path: font_path,
         work_dir: work_dir,
-        export_glyph_renders: export_glyph_renders
+        export_glyph_renders: export_glyph_renders,
     }
 }
 
 fn find_font(name: &str) -> PathBuf {
     // Font directories - places to check
     // https://support.apple.com/en-us/HT201722
-    let mut font_directories = vec![
-        String::from("/Library/Fonts/"),
-        String::from("/Network/Library/Fonts/"),
-        String::from("/System/Library/Fonts/"),
-        String::from("/System Folder/Fonts/")
-    ];
+    let mut font_directories = vec![String::from("/Library/Fonts/"),
+                                    String::from("/Network/Library/Fonts/"),
+                                    String::from("/System/Library/Fonts/"),
+                                    String::from("/System Folder/Fonts/")];
 
     if let Ok(path) = env::var("HOME") {
         let user_home_font = path + "/Library/Fonts/";
@@ -139,7 +141,8 @@ fn find_font(name: &str) -> PathBuf {
         let paths = match glob(&pattern) {
             Ok(paths) => paths,
             Err(pattern_error) => {
-                println!("There was a pattern error while searching for the font name {}:", name);
+                println!("There was a pattern error while searching for the font name {}:",
+                         name);
                 println!("{}", pattern_error);
                 exit(1)
             }
@@ -162,7 +165,8 @@ fn find_font(name: &str) -> PathBuf {
     }
 
     if candidates.len() > 1 {
-        println!("We found the the following font files that matched {}:\n", name);
+        println!("We found the the following font files that matched {}:\n",
+                 name);
         for candidate in candidates {
             println!("\t{}", candidate.to_string_lossy());
         }

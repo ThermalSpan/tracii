@@ -1,37 +1,36 @@
 use image::{ImageBuffer, Rgb};
-use std::fs::{create_dir, File};
+use ::fs::{create_dir, File};
 use std::io::Read;
 use std::path::Path;
 use std::process::exit;
-use rusttype::{Font, FontCollection, Point, Rect, Scale, SharedBytes};
+use rusttype::{Font, Glyph, FontCollection, Point, Rect, Scale, SharedBytes};
 
-pub fn render_font(
-    font_path: &Path,
-    chars_to_render: &Vec<char>
-) -> Vec<GlyphRender>
-{
+pub fn load_glyphs(font_path: &Path, chars_to_render: &Vec<char>) -> Vec<(char, Glyph<'static>)> {
     // First we read in the file into a byte buffer
     let mut font_file = File::open(font_path).unwrap();
-	let mut byte_buffer = Vec::new();
+    let mut byte_buffer = Vec::new();
     if let Err(read_error) = font_file.read_to_end(&mut byte_buffer) {
-        println!("There was an error reading from {}\n{}", font_path.to_string_lossy(), read_error);
+        println!("There was an error reading from {}\n{}",
+                 font_path.to_string_lossy(),
+                 read_error);
         exit(2);
     }
 
     // Then we convert that byte buffer into a Vec of Fonts
-	let mut fonts_in_file: Vec<Font> = FontCollection::from_bytes(SharedBytes::ByRef(&byte_buffer))
-		.into_fonts()
-		.collect();
+    let mut fonts_in_file: Vec<Font> = FontCollection::from_bytes(SharedBytes::ByRef(&byte_buffer))
+        .into_fonts()
+        .collect();
 
     // For now we can only handle having one font in the file
-	if fonts_in_file.len() == 0 {
-		println!("There were no fonts in {}", font_path.to_string_lossy());
-		exit(2);
-	}
-	if fonts_in_file.len() > 1 {
-		println!("There was more than one font in {}", font_path.to_string_lossy());
-		exit(2);
-	}
+    if fonts_in_file.len() == 0 {
+        println!("There were no fonts in {}", font_path.to_string_lossy());
+        exit(2);
+    }
+    if fonts_in_file.len() > 1 {
+        println!("There was more than one font in {}",
+                 font_path.to_string_lossy());
+        exit(2);
+    }
     let font = fonts_in_file.remove(0);
 
     // Now we extract the glyphs for the characters we want to render with
@@ -44,28 +43,39 @@ pub fn render_font(
             Some(glyph) => glyph,
             None => {
                 println!("WARN: There was an error loading the glyph for {}", c);
-                continue
+                continue;
             }
         };
 
-        glyphs.push((c, glyph));
+        glyphs.push((c.clone(), glyph.standalone()));
     }
+
+    glyphs
+}
+
+pub fn render_glyphs(glyphs: &Vec<(char, Glyph)>,
+                     background: [u8; 3],
+                     foreground: [u8; 3],
+                     height: u32,
+                     ratio: f32)
+                     -> Vec<GlyphRender> {
+    let width = (height as f32 / ratio) as u32;
 
     // Now we transform the glyphs to GlyphRenders (fancy image buffers)
     let mut glyph_renders = Vec::new();
-    for (c, glyph) in glyphs {
+    for &(ref c, ref glyph) in glyphs {
         // The Glyph needs scale and position information
-        let positioned_glyph = glyph
-            .scaled(Scale {x: 40.0, y: 80.0})
-            .positioned(Point {x: 0.0, y: 0.0});
+        let positioned_glyph = glyph.standalone()
+            .scaled(Scale { x: 40.0, y: 80.0 })
+            .positioned(Point { x: 0.0, y: 0.0 });
 
         // The renderer needs information about the scaled glyph
-        let mut renderer = GlyphRenderer::new(
-            positioned_glyph.pixel_bounding_box().unwrap(),
-            Rgb {data: [255, 255, 255]},
-            Rgb {data: [0, 0, 0]},
-            c.clone()
-        );
+        let mut renderer = GlyphRenderer::new(positioned_glyph.pixel_bounding_box().unwrap(),
+                                              Rgb { data: background },
+                                              Rgb { data: foreground },
+                                              height,
+                                              width,
+                                              c.clone());
 
         // Now draw it and push the result
         positioned_glyph.draw(&mut renderer);
@@ -79,15 +89,17 @@ pub fn export_glyph_renders(work_dir: &Path, glyph_renders: &Vec<GlyphRender>) {
     let mut index = 0;
     let render_dir = work_dir.join("glyph_renders");
 
-	if let Err(error) = create_dir(&render_dir) {
-		println!("There was an error making the render dir {}:\n{}", render_dir.to_string_lossy(), error);
-		exit(3);
-	}
+    if let Err(error) = create_dir(&render_dir) {
+        println!("There was an error making the render dir {}:\n{}",
+                 render_dir.to_string_lossy(),
+                 error);
+        exit(3);
+    }
 
     for render in glyph_renders {
-        let render_path = render_dir.join(format!("{}-glyph-render.png", index));
+        let render_path = render_dir.join(format!("{}.png", index));
         render.export(&render_path);
-		index += 1;
+        index += 1;
     }
 }
 
@@ -97,6 +109,8 @@ struct GlyphRenderer {
     foreground: Rgb<u8>,
     background_f: [f32; 3],
     foreground_f: [f32; 3],
+    x_offset: u32,
+    y_offset: u32,
     c: char,
 }
 
@@ -111,34 +125,35 @@ impl FnMut<(u32, u32, f32)> for GlyphRenderer {
         let t_g = (self.foreground_f[1] * args.2 + self.background_f[1] * (1.0 - args.2)) as u8;
         let t_b = (self.foreground_f[2] * args.2 + self.background_f[2] * (1.0 - args.2)) as u8;
 
-        self.buffer.put_pixel(args.0, args.1, Rgb {data: [t_r, t_g, t_b]});
+        self.buffer.put_pixel(args.0 + self.x_offset,
+                              args.1 + self.y_offset,
+                              Rgb { data: [t_r, t_g, t_b] });
     }
 }
 
 impl GlyphRenderer {
-    fn new(
-        bounding_box: Rect<i32>,
-        background: Rgb<u8>,
-        foreground: Rgb<u8>,
-        c: char
-    ) -> GlyphRenderer
-    {
-        let background_f = [
-            background[0].clone() as f32,
-            background[1].clone() as f32,
-            background[2].clone() as f32
-        ];
+    fn new(bounding_box: Rect<i32>,
+           background: Rgb<u8>,
+           foreground: Rgb<u8>,
+           height: u32,
+           width: u32,
+           c: char)
+           -> GlyphRenderer {
+        let background_f = [background[0].clone() as f32,
+                            background[1].clone() as f32,
+                            background[2].clone() as f32];
 
-        let foreground_f = [
-            foreground[0].clone() as f32,
-            foreground[1].clone() as f32,
-            foreground[2].clone() as f32
-        ];
+        let foreground_f = [foreground[0].clone() as f32,
+                            foreground[1].clone() as f32,
+                            foreground[2].clone() as f32];
 
-        let buffer = ImageBuffer::new(
-            (bounding_box.max.x - bounding_box.min.x) as u32,
-            (bounding_box.max.y - bounding_box.min.y) as u32,
-        );
+        let buffer = ImageBuffer::from_pixel(width, height, background);
+
+        let bb_width = (bounding_box.max.x - bounding_box.min.x) as u32;
+        let bb_height = (bounding_box.max.y - bounding_box.min.y) as u32;
+
+        let x_offset = (width - bb_width) / 2;
+        let y_offset = (height - bb_height) / 2;
 
         GlyphRenderer {
             buffer: buffer,
@@ -146,7 +161,9 @@ impl GlyphRenderer {
             foreground_f: foreground_f,
             background: background,
             foreground: foreground,
-            c: c
+            x_offset: x_offset,
+            y_offset: y_offset,
+            c: c,
         }
     }
 
@@ -155,7 +172,7 @@ impl GlyphRenderer {
             buffer: self.buffer,
             background: self.background,
             foreground: self.foreground,
-            c: self.c
+            c: self.c,
         }
     }
 }
@@ -172,7 +189,9 @@ impl GlyphRender {
         let result = self.buffer.save(path);
 
         if let Err(error) = result {
-            println!("There was an error saving the GlyphRender for {}:\n{}", self.c, error);
+            println!("There was an error saving the GlyphRender for {}:\n{}",
+                     self.c,
+                     error);
             exit(3);
         }
     }
