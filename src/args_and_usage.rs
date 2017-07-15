@@ -106,7 +106,7 @@ pub fn parse_args() -> Args { let args = App::new(PROGRAM_NAME)
             tempdir.into_path()
         }
     };
-        
+
     let export_glyph_renders = args.is_present("EXPORT_GLYPHS");
 
     Args {
@@ -121,9 +121,9 @@ fn find_font(name: &str) -> PathBuf {
     // Font directories - places to check
     // https://support.apple.com/en-us/HT201722
     let mut font_directories = vec![
-        String::from("/Library/Fonts/"), 
+        String::from("/Library/Fonts/"),
         String::from("/Network/Library/Fonts/"),
-        String::from("/System/Library/Fonts/"), 
+        String::from("/System/Library/Fonts/"),
         String::from("/System Folder/Fonts/")
     ];
 
