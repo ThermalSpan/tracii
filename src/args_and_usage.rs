@@ -1,7 +1,9 @@
 use clap::{Arg, ArgGroup, App};
 use glob::glob;
+use std::env;
 use std::path::PathBuf;
 use std::process::exit;
+use tempdir::TempDir;
 
 // Programmer defined constants
 static PROGRAM_NAME: &'static str = "tracii";
@@ -9,20 +11,14 @@ static PROGRAM_NAME: &'static str = "tracii";
 // Derived constants
 static VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-// Font directories - places to check
-// https://support.apple.com/en-us/HT201722
-static FONT_DIRECTORIES: &'static [&str] = &[
-    "~/Library/Fonts/", "/Library/Fonts/", "/Network/Library/Fonts/",
-    "/System/Library/Fonts/", "/System Folder/Fonts/"
-];
-
 pub struct Args {
     pub cell_ratio: f32,
-    pub font_path: PathBuf
+    pub font_path: PathBuf,
+    pub work_dir: PathBuf,
+    pub export_glyph_renders: bool
 }
 
-pub fn parse_args() -> Args {
-    let args = App::new(PROGRAM_NAME)
+pub fn parse_args() -> Args { let args = App::new(PROGRAM_NAME)
         .version(VERSION)
         .author("Russell W. Bentley <russell.w.bentley@icloud.com>")
         .about("A tool for generating fancy ASCII art")
@@ -45,6 +41,14 @@ pub fn parse_args() -> Args {
             .long("cellratio")
             .value_name("h/w")
             .takes_value(true))
+        .arg(Arg::with_name("WORKING_DIRECTORY")
+            .help("If you are interested in browsing artifacts, you should pass this")
+            .long("workdir")
+            .value_name("path/to")
+            .takes_value(true))
+        .arg(Arg::with_name("EXPORT_GLYPHS")
+            .help("Export the glyph renders to WORKDIR/glyph_renders")
+            .long("exportglyphs"))
         .get_matches();
 
     // The cell_ratio is a float parsed from a str with a default of 1.9
@@ -82,17 +86,56 @@ pub fn parse_args() -> Args {
         }
     };
 
+    let work_dir = match args.value_of("WORKING_DIRECTORY") {
+        Some(work_dir) => {
+            let path = PathBuf::from(work_dir);
+            if ! path.exists() {
+                println!("{} does not exist", path.to_string_lossy());
+                exit(1);
+            }
+            path
+        },
+        None => {
+            let tempdir = match TempDir::new("tracii") {
+                Ok(dir) => dir,
+                Err(error) => {
+                    println!("There was an error making a temporary directory:\n{}", error);
+                    exit(1);
+                }
+            };
+            tempdir.into_path()
+        }
+    };
+        
+    let export_glyph_renders = args.is_present("EXPORT_GLYPHS");
+
     Args {
         cell_ratio: cell_ratio,
         font_path: font_path,
+        work_dir: work_dir,
+        export_glyph_renders: export_glyph_renders
     }
 }
 
 fn find_font(name: &str) -> PathBuf {
+    // Font directories - places to check
+    // https://support.apple.com/en-us/HT201722
+    let mut font_directories = vec![
+        String::from("/Library/Fonts/"), 
+        String::from("/Network/Library/Fonts/"),
+        String::from("/System/Library/Fonts/"), 
+        String::from("/System Folder/Fonts/")
+    ];
+
+    if let Ok(path) = env::var("HOME") {
+        let user_home_font = path + "/Library/Fonts/";
+        font_directories.push(user_home_font);
+    }
+
     let mut candidates: Vec<PathBuf> = Vec::new();
 
-    for directory in FONT_DIRECTORIES {
-        let pattern = String::from(*directory) + name + "*";
+    for directory in font_directories {
+        let pattern = directory + name + "*";
         let paths = match glob(&pattern) {
             Ok(paths) => paths,
             Err(pattern_error) => {
@@ -119,7 +162,7 @@ fn find_font(name: &str) -> PathBuf {
     }
 
     if candidates.len() > 1 {
-        println!("We found the the following font files that matched {}:", name);
+        println!("We found the the following font files that matched {}:\n", name);
         for candidate in candidates {
             println!("\t{}", candidate.to_string_lossy());
         }
