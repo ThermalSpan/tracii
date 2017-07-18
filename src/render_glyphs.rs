@@ -1,5 +1,5 @@
 use image::{ImageBuffer, Rgb};
-use ::fs::{create_dir, File};
+use std::fs::{create_dir, File};
 use std::io::Read;
 use std::path::Path;
 use std::process::exit;
@@ -53,16 +53,17 @@ pub fn load_glyphs(font_path: &Path, chars_to_render: &Vec<char>) -> Vec<(char, 
     glyphs
 }
 
-pub fn render_glyphs(glyphs: &Vec<(char, Glyph)>,
-                     background: [u8; 3],
-                     foreground: [u8; 3],
-                     height: u32,
-                     ratio: f32)
-                     -> Vec<GlyphRender> {
+pub fn render_glyphs(
+    glyphs: &Vec<(char, Glyph)>,
+    renders: &mut Vec<GlyphRender>,
+    background: [u8; 3],
+    foreground: [u8; 3],
+    height: u32,
+    ratio: f32
+) {
     let width = (height as f32 / ratio) as u32;
 
     // Now we transform the glyphs to GlyphRenders (fancy image buffers)
-    let mut glyph_renders = Vec::new();
     for &(ref c, ref glyph) in glyphs {
         // The Glyph needs scale and position information
         let positioned_glyph = glyph.standalone()
@@ -70,19 +71,20 @@ pub fn render_glyphs(glyphs: &Vec<(char, Glyph)>,
             .positioned(Point { x: 0.0, y: 0.0 });
 
         // The renderer needs information about the scaled glyph
-        let mut renderer = GlyphRenderer::new(positioned_glyph.pixel_bounding_box().unwrap(),
-                                              Rgb { data: background },
-                                              Rgb { data: foreground },
-                                              height,
-                                              width,
-                                              c.clone());
+        let mut renderer = GlyphRenderer::new(
+            positioned_glyph.pixel_bounding_box().unwrap(),
+            Rgb { data: background },
+            Rgb { data: foreground },
+            height,
+            width,
+            c.clone()
+        );
 
         // Now draw it and push the result
         positioned_glyph.draw(&mut renderer);
-        glyph_renders.push(renderer.finalize());
+        renders.push(renderer.finalize());
     }
 
-    glyph_renders
 }
 
 pub fn export_glyph_renders(work_dir: &Path, glyph_renders: &Vec<GlyphRender>) {
@@ -178,7 +180,7 @@ impl GlyphRenderer {
 }
 
 pub struct GlyphRender {
-    buffer: ImageBuffer<Rgb<u8>, Vec<u8>>,
+    pub buffer: ImageBuffer<Rgb<u8>, Vec<u8>>,
     background: Rgb<u8>,
     foreground: Rgb<u8>,
     c: char,

@@ -16,6 +16,9 @@ pub struct Args {
     pub font_path: PathBuf,
     pub work_dir: PathBuf,
     pub export_glyph_renders: bool,
+    pub limited_char_set: bool,
+    pub color_256: bool,
+    pub make_render_scramble: bool,
 }
 
 pub fn parse_args() -> Args {
@@ -50,6 +53,15 @@ pub fn parse_args() -> Args {
         .arg(Arg::with_name("EXPORT_GLYPHS")
             .help("Export the glyph renders to WORKDIR/glyph_renders")
             .long("exportglyphs"))
+        .arg(Arg::with_name("LIMITED_CHARS")
+            .help("Use a limited char set")
+            .long("limcharset"))
+        .arg(Arg::with_name("256_COLOR")
+            .help("Use all 256 8-bit colors")
+            .long("256color"))
+        .arg(Arg::with_name("RENDER_SCRAMBLE")
+            .help("Export a scramble of the glyph renders")
+            .long("makerenderscramble"))
         .get_matches();
 
     // The cell_ratio is a float parsed from a str with a default of 1.9
@@ -111,23 +123,26 @@ pub fn parse_args() -> Args {
         }
     };
 
-    let export_glyph_renders = args.is_present("EXPORT_GLYPHS");
-
     Args {
         cell_ratio: cell_ratio,
         font_path: font_path,
         work_dir: work_dir,
-        export_glyph_renders: export_glyph_renders,
+        export_glyph_renders: args.is_present("EXPORT_GLYPHS"),
+        limited_char_set: args.is_present("LIMITED_CHARS"),
+        color_256: args.is_present("256_COLOR"),
+        make_render_scramble: args.is_present("RENDER_SCRAMBLE"),
     }
 }
 
 fn find_font(name: &str) -> PathBuf {
     // Font directories - places to check
     // https://support.apple.com/en-us/HT201722
-    let mut font_directories = vec![String::from("/Library/Fonts/"),
-                                    String::from("/Network/Library/Fonts/"),
-                                    String::from("/System/Library/Fonts/"),
-                                    String::from("/System Folder/Fonts/")];
+    let mut font_directories = vec![
+        String::from("/Library/Fonts/"),
+        String::from("/Network/Library/Fonts/"),
+        String::from("/System/Library/Fonts/"),
+        String::from("/System Folder/Fonts/")
+    ];
 
     if let Ok(path) = env::var("HOME") {
         let user_home_font = path + "/Library/Fonts/";
